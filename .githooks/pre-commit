@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+#
+# pre-commit — secret + privacy scan for The Long Take.
+# Enable in your local clone with:  git config core.hooksPath .githooks
+#
+# Scans the staged diff (additions only) for patterns that should never
+# land in this public repo. Any hit blocks the commit. To override in a
+# genuine emergency: git commit --no-verify.
+
+set -e
+
+# Files that are EXPECTED to contain redacted specifics for transparency.
+# REDACTION.md documents what was scrubbed; the pre-commit script declares
+# the patterns it blocks. Both legitimately mention the originals.
+WHITELIST_RE='^(REDACTION\.md|\.githooks/pre-commit)$'
+
+# Collect the staged additions, excluding whitelisted files
+STAGED_FILES=$(git diff --cached --diff-filter=AM --name-only)
+SCANNED_FILES=$(echo "$STAGED_FILES" | grep -Ev "$WHITELIST_RE" || true)
+
+if [[ -z "$SCANNED_FILES" ]]; then
+  exit 0
+fi
+
+DIFF=$(git diff --cached --diff-filter=AM -U0 -- $SCANNED_FILES | grep -E '^\+[^+]' || true)
+
+if [[ -z "$DIFF" ]]; then
+  exit 0
+fi
+
+violations=()
+
+check() {
+  local label="$1"; shift
+  local pattern="$1"; shift
+  if echo "$DIFF" | grep -E -i "$pattern" >/dev/null; then
+    violations+=("$label")
+  fi
+}
+
+# --- Network identifiers ----------------------------------------------------
+check "private IPv4 address (192.168.x.x)"  '\b192\.168\.[0-9]+\.[0-9]+\b'
+check "private IPv4 address (10.x.x.x)"     '\b10\.[0-9]+\.[0-9]+\.[0-9]+\b'
+check "private IPv4 address (172.16-31)"    '\b172\.(1[6-9]|2[0-9]|3[01])\.[0-9]+\.[0-9]+\b'
+# Note: `homeassistant.local` is the conventional mDNS default for every
+# HA OS install — public, generic, used as example hostname throughout
+# this project's docs. NOT a leak. Don't add a check for it.
+
+# --- Project-internal identifiers (not for public repo) ---------------------
+check "harold-agent path or hostname"       'harold-agent'
+check "/opt/harold path"                    '/opt/harold'
+check "specific street address"             'harold road|13 harold|13.harold'
+
+# --- Personal identifiers (Elena surname only — first names are OK) --------
+check "Elena's surname"                     'armellini'
+
+# --- Email addresses we don't want exposed ---------------------------------
+check "personal Gmail"                      'alfied@gmail|alfie@gmail'
+check "Stoppedclocks email"                 '@stoppedclocks'
+
+# --- Credentials / secret-shaped strings -----------------------------------
+check "live API key (sk- prefix)"           'sk-[a-zA-Z0-9]{20,}'
+check "JWT (header.payload.sig)"            'eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}'
+check "AWS access key"                      '\bAKIA[0-9A-Z]{16}\b'
+check "GitHub token"                        '\bgh[ps]_[A-Za-z0-9]{30,}\b'
+check "Long-Lived Access Token-like"        '\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b'
+check "MariaDB literal password"            'password\s*=\s*["'\'']\w{8,}["'\'']'
+
+# --- Local rooms.py shouldn't ever be staged -------------------------------
+if git diff --cached --name-only | grep -q '^precompute/rooms\.py$'; then
+  violations+=("precompute/rooms.py is gitignored — do not stage it")
+fi
+
+if [[ ${#violations[@]} -gt 0 ]]; then
+  echo
+  echo "✘ pre-commit blocked: privacy / secret patterns detected"
+  echo
+  for v in "${violations[@]}"; do
+    echo "    • $v"
+  done
+  echo
+  echo "Resolve the issue, re-stage, and commit again."
+  echo "(Override only in a genuine emergency: git commit --no-verify)"
+  exit 1
+fi
+
+exit 0

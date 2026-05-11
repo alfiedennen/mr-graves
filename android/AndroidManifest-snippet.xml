@@ -1,0 +1,75 @@
+<!--
+  AndroidManifest-snippet.xml — Required permissions and component
+  declarations to drop into your app's AndroidManifest.xml.
+
+  Adapt:
+    - The android:name="…" attributes for the service / receiver / plugin
+      should match your final package name (search/replace
+      `com.example.wakeword` here AND in the three .kt files).
+    - The activity launchMode + flags below are an example; reuse your
+      existing MainActivity, just add showWhenLocked + turnScreenOn.
+-->
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     PERMISSIONS — drop these inside <manifest> root, before <application>
+     ═════════════════════════════════════════════════════════════════════ -->
+
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+<uses-permission android:name="android.permission.WAKE_LOCK" />
+
+<!-- Required to launch your activity over the lockscreen on detection. -->
+<uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+<!-- Optional but useful — allows your activity to reorder-to-front on
+     subsequent detections without user-perceived hop. -->
+<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     ACTIVITY — your existing MainActivity (or equivalent) needs the
+     showWhenLocked + turnScreenOn attributes so the WakewordService can
+     wake the screen + bypass the lockscreen on detection.
+     ═════════════════════════════════════════════════════════════════════ -->
+
+<activity
+    android:name=".MainActivity"
+    android:exported="true"
+    android:launchMode="singleTask"
+    android:showWhenLocked="true"
+    android:turnScreenOn="true"
+    android:theme="@style/AppTheme">
+    <!-- Your existing intent-filters here -->
+</activity>
+
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     SERVICE — the foreground microphone listener.
+     foregroundServiceType MUST be "microphone" on Android 14+.
+     ═════════════════════════════════════════════════════════════════════ -->
+
+<service
+    android:name="com.example.wakeword.WakewordService"
+    android:exported="false"
+    android:foregroundServiceType="microphone" />
+
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     BOOT RECEIVER — fires on device boot + APK update so the SharedPrefs
+     flag can be read. Note: the receiver does NOT auto-start the
+     service on Android 14+ (mic-typed FGS launches from boot are
+     blocked); it only logs.
+     ═════════════════════════════════════════════════════════════════════ -->
+
+<receiver
+    android:name="com.example.wakeword.WakewordBootReceiver"
+    android:enabled="true"
+    android:exported="true">
+    <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+    </intent-filter>
+</receiver>

@@ -1,0 +1,26 @@
+# Local config / build artefacts
+*.iml
+.gradle/
+build/
+captures/
+
+# Android Studio
+.idea/
+*.swp
+*.swo
+local.properties
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Python (in case anyone runs pip-installed openwakeword scripts here)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local model staging
+*.tflite.tmp
+*.onnx.tmp
